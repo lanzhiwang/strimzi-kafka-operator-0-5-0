@@ -47,7 +47,39 @@ public class ClusterOperatorConfig {
      * @return  Cluster Operator configuration instance
      */
     public static ClusterOperatorConfig fromMap(Map<String, String> map) {
-
+        /**
+        {
+            STRIMZI_DEFAULT_ZOOKEEPER_IMAGE=strimzi/zookeeper:0.5.0,
+            PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin,
+            STRIMZI_DEFAULT_TLS_SIDECAR_TOPIC_OPERATOR_IMAGE=strimzi/topic-operator-stunnel:0.5.0,
+            KUBERNETES_PORT=tcp://10.96.0.1:443,
+            STRIMZI_DEFAULT_TOPIC_OPERATOR_IMAGE=strimzi/topic-operator:0.5.0,
+            JAVA_HOME=/usr/lib/jvm/java,
+            STRIMZI_FULL_RECONCILIATION_INTERVAL_MS=120000,
+            KUBERNETES_SERVICE_HOST=10.96.0.1,
+            STRIMZI_DEFAULT_KAFKA_IMAGE=strimzi/kafka:0.5.0,
+            STRIMZI_DEFAULT_KAFKA_CONNECT_IMAGE=strimzi/kafka-connect:0.5.0,
+            STRIMZI_DEFAULT_TLS_SIDECAR_KAFKA_IMAGE=strimzi/kafka-stunnel:0.5.0,
+            PWD=/,
+            KUBERNETES_PORT_443_TCP=tcp://10.96.0.1:443,
+            STRIMZI_OPERATION_TIMEOUT_MS=300000,
+            KUBERNETES_PORT_443_TCP_ADDR=10.96.0.1,
+            STRIMZI_DEFAULT_KAFKA_CONNECT_S2I_IMAGE=strimzi/kafka-connect-s2i:0.5.0,
+            STRIMZI_VERSION=0.5.0,
+            STRIMZI_NAMESPACE=default,
+            KUBERNETES_PORT_443_TCP_PROTO=tcp,
+            KUBERNETES_SERVICE_PORT=443,
+            STRIMZI_DEFAULT_KAFKA_INIT_IMAGE=strimzi/kafka-init:0.5.0,
+            STRIMZI_LOG_LEVEL=INFO,
+            HOSTNAME=strimzi-cluster-operator-7bdb776c8d-rnprs,
+            KUBERNETES_PORT_443_TCP_PORT=443,
+            KUBERNETES_SERVICE_PORT_HTTPS=443,
+            SHLVL=1,
+            HOME=/root,
+            STRIMZI_DEFAULT_TLS_SIDECAR_ZOOKEEPER_IMAGE=strimzi/zookeeper-stunnel:0.5.0,
+            MALLOC_ARENA_MAX=2
+        }
+         */
         String namespacesList = map.get(ClusterOperatorConfig.STRIMZI_NAMESPACE);
         Set<String> namespaces;
         if (namespacesList == null || namespacesList.isEmpty()) {

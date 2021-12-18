@@ -65,12 +65,9 @@ public abstract class AbstractAssemblyOperator<C extends KubernetesClient, T ext
     protected final CertManager certManager;
     private final String kind;
 
-    /**
-     * @param vertx The Vertx instance
-     * @param isOpenShift True iff running on OpenShift
-     * @param assemblyType Assembly type
-     * @param resourceOperator For operating on the desired resource
-     */
+    // super(vertx, isOpenShift, AssemblyType.KAFKA, certManager, supplier.kafkaOperator, supplier.secretOperations);
+    // super(vertx, isOpenShift, AssemblyType.CONNECT, certManager, connectOperator, secretOperations);
+    // super(vertx, isOpenShift, AssemblyType.CONNECT_S2I, certManager, connectOperator, secretOperations);
     protected AbstractAssemblyOperator(Vertx vertx, boolean isOpenShift, AssemblyType assemblyType,
                                        CertManager certManager,
                                        AbstractWatchableResourceOperator<C, T, L, D, R> resourceOperator,
@@ -278,18 +275,9 @@ public abstract class AbstractAssemblyOperator<C extends KubernetesClient, T ext
         });
     }
 
-    /**
-     * Reconcile assembly resources in the given namespace having the given selector.
-     * Reconciliation works by getting the assembly ConfigMaps in the given namespace with the given selector and
-     * comparing with the corresponding {@linkplain #getResources(String, Labels) resource}.
-     * <ul>
-     * <li>An assembly will be {@linkplain #createOrUpdate(Reconciliation, T, List, Handler) created} for all ConfigMaps without same-named resources</li>
-     * <li>An assembly will be {@linkplain #delete(Reconciliation, Handler) deleted} for all resources without same-named ConfigMaps</li>
-     * </ul>
-     *
-     * @param trigger A description of the triggering event (timer or watch), used for logging
-     * @param namespace The namespace
-     */
+    // kafkaAssemblyOperator.reconcileAll("timer", namespace);
+    // reconcileAll("watch error", namespace);
+    // reconcileAll("watch unknown", namespace);
     public final CountDownLatch reconcileAll(String trigger, String namespace) {
 
         // get ConfigMaps with kind=cluster&type=kafka (or connect, or connect-s2i) for the corresponding cluster type

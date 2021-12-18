@@ -23,8 +23,10 @@ public class ResourceOperatorSupplier {
     public final ClusterRoleBindingOperator clusterRoleBindingOperator;
     public final CrdOperator<KubernetesClient, KafkaAssembly, KafkaAssemblyList, DoneableKafkaAssembly> kafkaOperator;
 
+    // ResourceOperatorSupplier(vertx, client, config.getOperationTimeoutMs())
     public ResourceOperatorSupplier(Vertx vertx, KubernetesClient client, long operationTimeoutMs) {
-        this(new ServiceOperator(vertx, client),
+        this(
+            new ServiceOperator(vertx, client),
             new ZookeeperSetOperator(vertx, client, operationTimeoutMs),
             new KafkaSetOperator(vertx, client, operationTimeoutMs),
             new ConfigMapOperator(vertx, client),
@@ -34,7 +36,8 @@ public class ResourceOperatorSupplier {
             new ServiceAccountOperator(vertx, client),
             new RoleBindingOperator(vertx, client),
             new ClusterRoleBindingOperator(vertx, client),
-            new CrdOperator<>(vertx, client, KafkaAssembly .class, KafkaAssemblyList .class, DoneableKafkaAssembly .class));
+            new CrdOperator<>(vertx, client, KafkaAssembly .class, KafkaAssemblyList .class, DoneableKafkaAssembly .class)
+        );
     }
 
     public ResourceOperatorSupplier(ServiceOperator serviceOperations,

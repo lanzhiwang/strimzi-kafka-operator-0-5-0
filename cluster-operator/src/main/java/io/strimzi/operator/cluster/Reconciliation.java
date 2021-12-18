@@ -25,6 +25,8 @@ public class Reconciliation {
     private final String assemblyName;
     private final int id;
 
+    // String name = cm.getMetadata().getName();
+    // Reconciliation reconciliation = new Reconciliation("watch", assemblyType, namespace, name);
     public Reconciliation(String trigger, AssemblyType type, String namespace, String assemblyName) {
         this.trigger = trigger;
         this.type = type;

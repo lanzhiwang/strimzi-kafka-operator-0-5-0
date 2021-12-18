@@ -215,6 +215,7 @@ public class TopicOperator extends AbstractModel {
      * @param secrets Secrets containing already generated certificates
      * @return Topic Operator instance, null if not configured in the ConfigMap
      */
+    // TopicOperator.fromCrd(certManager, kafkaAssembly, assemblySecrets);
     public static TopicOperator fromCrd(CertManager certManager, KafkaAssembly kafkaAssembly, List<Secret> secrets) {
         TopicOperator result;
         if (kafkaAssembly.getSpec().getTopicOperator() != null) {

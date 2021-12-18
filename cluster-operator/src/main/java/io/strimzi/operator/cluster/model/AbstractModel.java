@@ -165,12 +165,31 @@ public abstract class AbstractModel {
         this.labels = labels.withCluster(cluster);
     }
 
-    public Labels getLabels() {
-        return labels;
+    protected abstract String getDefaultLogConfigFileName();
+
+    protected Properties getDefaultLogConfig() {
+        Properties properties = new Properties();
+        String defaultLogConfigFileName = getDefaultLogConfigFileName();
+        try {
+            properties = getDefaultLoggingProperties(defaultLogConfigFileName);
+        } catch (IOException e) {
+            log.warn("Unable to read default log config from '{}'", defaultLogConfigFileName);
+        }
+        return properties;
     }
 
-    public int getReplicas() {
-        return replicas;
+    protected Properties getDefaultLoggingProperties(String defaultConfigResourceFileName) throws IOException {
+        Properties defaultSettings = new Properties();
+        InputStream is = null;
+        try {
+            is = AbstractModel.class.getResourceAsStream("/" + defaultConfigResourceFileName);
+            defaultSettings.load(is);
+        } finally {
+            if (is != null) {
+                is.close();
+            }
+        }
+        return defaultSettings;
     }
 
     protected void setReplicas(int replicas) {
@@ -181,27 +200,326 @@ public abstract class AbstractModel {
         this.image = image;
     }
 
-    protected void setReadinessTimeout(int readinessTimeout) {
-        this.readinessTimeout = readinessTimeout;
-    }
-
     protected void setReadinessInitialDelay(int readinessInitialDelay) {
         this.readinessInitialDelay = readinessInitialDelay;
     }
 
-    protected void setLivenessTimeout(int livenessTimeout) {
-        this.livenessTimeout = livenessTimeout;
+    protected void setReadinessTimeout(int readinessTimeout) {
+        this.readinessTimeout = readinessTimeout;
     }
 
     protected void setLivenessInitialDelay(int livenessInitialDelay) {
         this.livenessInitialDelay = livenessInitialDelay;
     }
 
-    /**
-     * Returns the Docker image which should be used by this cluster
-     *
-     * @return
-     */
+    protected void setLivenessTimeout(int livenessTimeout) {
+        this.livenessTimeout = livenessTimeout;
+    }
+
+    protected void setLogging(Logging logging) {
+        this.logging = logging;
+    }
+
+    public void setJvmOptions(JvmOptions jvmOptions) {
+        this.jvmOptions = jvmOptions;
+    }
+
+    protected void setConfiguration(AbstractConfiguration configuration) {
+        this.configuration = configuration;
+    }
+
+    protected void setMetricsEnabled(boolean isMetricsEnabled) {
+        this.isMetricsEnabled = isMetricsEnabled;
+    }
+
+    protected void setMetricsConfig(Iterable<Map.Entry<String, Object>> metricsConfig) {
+        this.metricsConfig = metricsConfig;
+    }
+
+    protected void setStorage(Storage storage) {
+        this.storage = storage;
+    }
+
+    protected void setUserAffinity(Affinity affinity) {
+        this.userAffinity = affinity;
+    }
+
+    public void setResources(Resources resources) {
+        this.resources = resources;
+    }
+
+    public void setTolerations(List<Toleration> tolerations) {
+        this.tolerations = tolerations;
+    }
+
+    protected byte[] decodeFromSecret(Secret secret, String key) {
+        return Base64.getDecoder().decode(secret.getData().get(key));
+    }
+
+    // private Map<String, CertAndKey> brokerCerts;
+    // brokerCerts = maybeCopyOrGenerateCerts(certManager, clusterSecret, replicasInternalSecret, clusterCA, KafkaCluster::kafkaPodName);
+    protected Map<String, CertAndKey> maybeCopyOrGenerateCerts(
+        CertManager certManager,
+        Optional<Secret> secret,
+        int replicasInSecret,
+        CertAndKey caCert,
+        BiFunction<String, Integer, String> podName) throws IOException {
+
+        Map<String, CertAndKey> certs = new HashMap<>();
+
+        // copying the minimum number of certificates already existing in the secret
+        // scale up -> it will copy all certificates
+        // scale down -> it will copy just the requested number of replicas
+        for (int i = 0; i < Math.min(replicasInSecret, replicas); i++) {
+            // my-cluster-kafka-0  my-cluster-kafka-1  my-cluster-kafka-2
+            log.debug("{} already exists", podName.apply(cluster, i));
+            certs.put(
+                podName.apply(cluster, i),
+                new CertAndKey(
+                    decodeFromSecret(secret.get(), podName.apply(cluster, i) + ".key"),
+                    decodeFromSecret(secret.get(), podName.apply(cluster, i) + ".crt")
+                )
+            );
+        }
+
+        File brokerCsrFile = File.createTempFile("tls", "broker-csr");
+        File brokerKeyFile = File.createTempFile("tls", "broker-key");
+        File brokerCertFile = File.createTempFile("tls", "broker-cert");
+
+        // generate the missing number of certificates
+        // scale up -> generate new certificates for added replicas
+        // scale down -> does nothing
+        for (int i = replicasInSecret; i < replicas; i++) {
+            log.debug("{} to generate", podName.apply(cluster, i));
+
+            Subject sbj = new Subject();
+            sbj.setOrganizationName("io.strimzi");
+            sbj.setCommonName(getName());
+
+            certManager.generateCsr(brokerKeyFile, brokerCsrFile, sbj);
+            certManager.generateCert(brokerCsrFile, caCert.key(), caCert.cert(), brokerCertFile, CERTS_EXPIRATION_DAYS);
+
+            certs.put(podName.apply(cluster, i),
+                    new CertAndKey(Files.readAllBytes(brokerKeyFile.toPath()), Files.readAllBytes(brokerCertFile.toPath())));
+        }
+
+        if (!brokerCsrFile.delete()) {
+            log.warn("{} cannot be deleted", brokerCsrFile.getName());
+        }
+        if (!brokerKeyFile.delete()) {
+            log.warn("{} cannot be deleted", brokerKeyFile.getName());
+        }
+        if (!brokerCertFile.delete()) {
+            log.warn("{} cannot be deleted", brokerCertFile.getName());
+        }
+
+        return certs;
+    }
+
+
+    public Logging getLogging() {
+        return logging;
+    }
+
+    protected Map<String, String> getPrometheusAnnotations()    {
+        Map<String, String> annotations = new HashMap<String, String>(3);
+        annotations.put("prometheus.io/port", String.valueOf(metricsPort));
+        annotations.put("prometheus.io/scrape", "true");
+        annotations.put("prometheus.io/path", "/metrics");
+
+        return annotations;
+    }
+
+    // createServicePort(clients, 9092, 9092, "TCP")
+    // createServicePort(clientstls, 9093, 9093, "TCP")
+    // createServicePort(replication, 9091, 9091, "TCP")
+    // createServicePort(kafkametrics, 9404, 9404, "TCP")
+    protected ServicePort createServicePort(String name, int port, int targetPort, String protocol) {
+        ServicePort servicePort = new ServicePortBuilder()
+            .withName(name)
+            .withProtocol(protocol)
+            .withPort(port)
+            .withNewTargetPort(targetPort)
+            .build();
+        log.trace("Created service port {}", servicePort);
+        return servicePort;
+    }
+
+    protected Service createService(String name, List<ServicePort> ports) {
+        return createService(name, ports, Collections.emptyMap());
+    }
+
+    // createService("ClusterIP", List<ServicePort>, Map<String, String>)
+    protected Service createService(String type, List<ServicePort> ports,  Map<String, String> annotations) {
+        Service service = new ServiceBuilder()
+                .withNewMetadata()
+                    .withName(serviceName)
+                    .withLabels(getLabelsWithName(serviceName))
+                    .withNamespace(namespace)
+                    .withAnnotations(annotations)
+                .endMetadata()
+                .withNewSpec()
+                    .withType(type)
+                    .withSelector(getLabelsWithName())
+                    .withPorts(ports)
+                .endSpec()
+                .build();
+        log.trace("Created service {}", service);
+        return service;
+    }
+
+    protected Map<String, String> getLabelsWithName(String name) {
+        return labels.withName(name).toMap();
+    }
+
+    protected Service createHeadlessService(List<ServicePort> ports) {
+        return createHeadlessService(ports, Collections.emptyMap());
+    }
+
+    protected Service createHeadlessService(List<ServicePort> ports, Map<String, String> annotations) {
+        Service service = new ServiceBuilder()
+                .withNewMetadata()
+                    .withName(headlessServiceName)
+                    .withLabels(getLabelsWithName(headlessServiceName))
+                    .withNamespace(namespace)
+                    .withAnnotations(annotations)
+                .endMetadata()
+                .withNewSpec()
+                    .withType("ClusterIP")
+                    .withClusterIP("None")
+                    .withSelector(getLabelsWithName())
+                    .withPorts(ports)
+                .endSpec()
+                .build();
+        log.trace("Created headless service {}", service);
+        return service;
+    }
+
+    protected Affinity getMergedAffinity() {
+        return getUserAffinity();
+    }
+
+    protected Affinity getUserAffinity() {
+        return this.userAffinity;
+    }
+
+    protected List<Container> getInitContainers() {
+        return null;
+    }
+
+    protected abstract List<Container> getContainers();
+
+    protected StatefulSet createStatefulSet(
+            List<Volume> volumes,
+            List<PersistentVolumeClaim> volumeClaims,
+            List<VolumeMount> volumeMounts,
+            Affinity affinity,
+            List<Container> initContainers,
+            List<Container> containers,
+            boolean isOpenShift) {
+
+        Map<String, String> annotations = new HashMap<>();
+
+        annotations.put(DELETE_CLAIM_ANNOTATION,
+                String.valueOf(storage instanceof PersistentClaimStorage
+                        && ((PersistentClaimStorage) storage).isDeleteClaim()));
+
+
+        List<Container> initContainersInternal = new ArrayList<>();
+        PodSecurityContext securityContext = null;
+        // if a persistent volume claim is requested and the running cluster is a Kubernetes one
+        // there is an hack on volume mounting which needs an "init-container"
+        if (this.storage instanceof PersistentClaimStorage && !isOpenShift) {
+
+            String chown = String.format("chown -R %d:%d %s",
+                    AbstractModel.VOLUME_MOUNT_HACK_GROUPID,
+                    AbstractModel.VOLUME_MOUNT_HACK_GROUPID,
+                    volumeMounts.get(0).getMountPath());
+
+            Container initContainer = new ContainerBuilder()
+                    .withName(AbstractModel.VOLUME_MOUNT_HACK_NAME)
+                    .withImage(AbstractModel.VOLUME_MOUNT_HACK_IMAGE)
+                    .withVolumeMounts(volumeMounts.get(0))
+                    .withCommand("sh", "-c", chown)
+                    .build();
+
+            initContainersInternal.add(initContainer);
+
+            securityContext = new PodSecurityContextBuilder()
+                    .withFsGroup(AbstractModel.VOLUME_MOUNT_HACK_GROUPID)
+                    .build();
+        }
+        // add all the other init containers provided by the specific model implementation
+        if (initContainers != null) {
+            initContainersInternal.addAll(initContainers);
+        }
+
+        StatefulSet statefulSet = new StatefulSetBuilder()
+                .withNewMetadata()
+                    .withName(name)
+                    .withLabels(getLabelsWithName())
+                    .withNamespace(namespace)
+                    .withAnnotations(annotations)
+                .endMetadata()
+                .withNewSpec()
+                    .withPodManagementPolicy("Parallel")
+                    .withUpdateStrategy(new StatefulSetUpdateStrategyBuilder().withType("OnDelete").build())
+                    .withSelector(new LabelSelectorBuilder().withMatchLabels(getLabelsWithName()).build())
+                    .withServiceName(headlessServiceName)
+                    .withReplicas(replicas)
+                    .withNewTemplate()
+                        .withNewMetadata()
+                            .withName(name)
+                            .withLabels(getLabelsWithName())
+                        .endMetadata()
+                        .withNewSpec()
+                            .withServiceAccountName(getServiceAccountName())
+                            .withAffinity(affinity)
+                            .withSecurityContext(securityContext)
+                            .withInitContainers(initContainersInternal)
+                            .withContainers(containers)
+                            .withVolumes(volumes)
+                            .withTolerations(getTolerations())
+                        .endSpec()
+                    .endTemplate()
+                    .withVolumeClaimTemplates(volumeClaims)
+                .endSpec()
+                .build();
+
+        return statefulSet;
+    }
+
+    public ConfigMap generateMetricsAndLogConfigMap(ConfigMap cm) {
+        Map<String, String> data = new HashMap<>();
+        // log4j.properties
+        data.put(getAncillaryConfigMapKeyLogConfig(), parseLogging(getLogging(), cm));
+        if (isMetricsEnabled()) {
+            HashMap m = new HashMap();
+            for (Map.Entry<String, Object> entry : getMetricsConfig()) {
+                m.put(entry.getKey(), entry.getValue());
+            }
+            data.put(ANCILLARY_CM_KEY_METRICS, new JsonObject(m).toString());
+        }
+
+        ConfigMap configMap = createConfigMap(getAncillaryConfigName(), data);
+        if (getLogging() != null) {
+            getLogging().setCm(configMap);
+        }
+        return configMap;
+    }
+
+    String getAncillaryConfigMapKeyLogConfig() {
+        return ANCILLARY_CM_KEY_LOG_CONFIG;  // log4j.properties
+    }
+
+    public Labels getLabels() {
+        return labels;
+    }
+
+    public int getReplicas() {
+        return replicas;
+    }
+
     public String getName() {
         return name;
     }
@@ -218,60 +536,10 @@ public abstract class AbstractModel {
         return getLabelsWithName(name);
     }
 
-    protected Map<String, String> getLabelsWithName(String name) {
-        return labels.withName(name).toMap();
-    }
-
     public boolean isMetricsEnabled() {
         return isMetricsEnabled;
     }
 
-    protected void setMetricsEnabled(boolean isMetricsEnabled) {
-        this.isMetricsEnabled = isMetricsEnabled;
-    }
-
-
-    protected abstract String getDefaultLogConfigFileName();
-
-    /**
-     * Returns map with all available loggers for current pod and default values.
-     * @return
-     */
-    protected Properties getDefaultLogConfig() {
-        Properties properties = new Properties();
-        String defaultLogConfigFileName = getDefaultLogConfigFileName();
-        try {
-            properties = getDefaultLoggingProperties(defaultLogConfigFileName);
-        } catch (IOException e) {
-            log.warn("Unable to read default log config from '{}'", defaultLogConfigFileName);
-        }
-        return properties;
-    }
-
-    /**
-     * Takes resource file containing default log4j properties and returns it as a Properties.
-     * @param defaultConfigResourceFileName name of file, where default log4j properties are stored
-     * @return
-     */
-    protected Properties getDefaultLoggingProperties(String defaultConfigResourceFileName) throws IOException {
-        Properties defaultSettings = new Properties();
-        InputStream is = null;
-        try {
-            is = AbstractModel.class.getResourceAsStream("/" + defaultConfigResourceFileName);
-            defaultSettings.load(is);
-        } finally {
-            if (is != null) {
-                is.close();
-            }
-        }
-        return defaultSettings;
-    }
-
-    /**
-     * Transforms map to log4j properties file format
-     * @param newSettings map with properties
-     * @return
-     */
     protected static String createPropertiesString(Properties newSettings) {
         StringWriter sw = new StringWriter();
         try {
@@ -281,14 +549,6 @@ public abstract class AbstractModel {
         }
         // remove date comment, because it is updated with each reconciliation which leads to restarting pods
         return sw.toString().replaceAll("#[A-Za-z]+ [A-Za-z]+ [0-9]+ [0-9]+:[0-9]+:[0-9]+ [A-Z]+ [0-9]+", "");
-    }
-
-    public Logging getLogging() {
-        return logging;
-    }
-
-    protected void setLogging(Logging logging) {
-        this.logging = logging;
     }
 
     public String parseLogging(Logging logging, ConfigMap externalCm) {
@@ -354,36 +614,10 @@ public abstract class AbstractModel {
         }
     }
 
-    /**
-     * Generates a metrics and logging ConfigMap according to configured defaults
-     * @return The generated ConfigMap
-     */
-    public ConfigMap generateMetricsAndLogConfigMap(ConfigMap cm) {
-        Map<String, String> data = new HashMap<>();
-        data.put(getAncillaryConfigMapKeyLogConfig(), parseLogging(getLogging(), cm));
-        if (isMetricsEnabled()) {
-            HashMap m = new HashMap();
-            for (Map.Entry<String, Object> entry : getMetricsConfig()) {
-                m.put(entry.getKey(), entry.getValue());
-            }
-            data.put(ANCILLARY_CM_KEY_METRICS, new JsonObject(m).toString());
-        }
-
-        ConfigMap configMap = createConfigMap(getAncillaryConfigName(), data);
-        if (getLogging() != null) {
-            getLogging().setCm(configMap);
-        }
-        return configMap;
-    }
-
     public String getLogConfigName() {
         return logConfigName;
     }
 
-    /**
-     * Sets name of field in cluster config map, where logging configuration is stored
-     * @param logConfigName
-     */
     protected void setLogConfigName(String logConfigName) {
         this.logConfigName = logConfigName;
     }
@@ -392,14 +626,6 @@ public abstract class AbstractModel {
         return metricsConfig;
     }
 
-    protected void setMetricsConfig(Iterable<Map.Entry<String, Object>> metricsConfig) {
-        this.metricsConfig = metricsConfig;
-    }
-
-    /**
-     * Returns name of config map used for storing metrics and logging configuration
-     * @return
-     */
     public String getAncillaryConfigName() {
         return ancillaryConfigName;
     }
@@ -416,26 +642,8 @@ public abstract class AbstractModel {
         return storage;
     }
 
-    protected void setStorage(Storage storage) {
-        this.storage = storage;
-    }
-
-    /**
-     * Returns the Configuration object which is passed to the cluster as EnvVar
-     *
-     * @return  Configuration object with cluster configuration
-     */
     public AbstractConfiguration getConfiguration() {
         return configuration;
-    }
-
-    /**
-     * Set the configuration object which might be passed to the cluster as EnvVar
-     *
-     * @param configuration Configuration object with cluster configuration
-     */
-    protected void setConfiguration(AbstractConfiguration configuration) {
-        this.configuration = configuration;
     }
 
     public String getVolumeName() {
@@ -446,16 +654,10 @@ public abstract class AbstractModel {
         return this.image;
     }
 
-    /**
-     * @return the service account used by the deployed cluster for Kubernetes/OpenShift API operations
-     */
     protected String getServiceAccountName() {
         return null;
     }
 
-    /**
-     * @return the cluster name
-     */
     public String getCluster() {
         return cluster;
     }
@@ -472,57 +674,9 @@ public abstract class AbstractModel {
         return name + "-" + podId;
     }
 
-    /**
-     * Sets the affinity as configured by the user in the cluster CR
-     * @param affinity
-     */
-    protected void setUserAffinity(Affinity affinity) {
-        this.userAffinity = affinity;
-    }
-
-    /**
-     * Gets the affinity as configured by the user in the cluster CR
-     */
-    protected Affinity getUserAffinity() {
-        return this.userAffinity;
-    }
-
-    /**
-     * Gets the tolerations as configured by the user in the cluster CR
-     */
     public List<Toleration> getTolerations() {
         return tolerations;
     }
-
-    /**
-     * Sets the tolerations as configured by the user in the cluster CR
-     *
-     * @param tolerations
-     */
-    public void setTolerations(List<Toleration> tolerations) {
-        this.tolerations = tolerations;
-    }
-
-    /**
-     * Gets the affinity to use in a template Pod (in a StatefulSet, or Deployment).
-     * In general this may include extra rules than just the {@link #userAffinity}.
-     * By default it is just the {@link #userAffinity}.
-     */
-    protected Affinity getMergedAffinity() {
-        return getUserAffinity();
-    }
-
-    /**
-     * @return a list of init containers to add to the StatefulSet/Deployment
-     */
-    protected List<Container> getInitContainers() {
-        return null;
-    }
-
-    /**
-     * @return a list of containers to add to the StatefulSet/Deployment
-     */
-    protected abstract List<Container> getContainers();
 
     protected VolumeMount createVolumeMount(String name, String path) {
         VolumeMount volumeMount = new VolumeMountBuilder()
@@ -541,17 +695,6 @@ public abstract class AbstractModel {
                 .build();
         log.trace("Created container port {}", containerPort);
         return containerPort;
-    }
-
-    protected ServicePort createServicePort(String name, int port, int targetPort, String protocol) {
-        ServicePort servicePort = new ServicePortBuilder()
-                .withName(name)
-                .withProtocol(protocol)
-                .withPort(port)
-                .withNewTargetPort(targetPort)
-                .build();
-        log.trace("Created service port {}", servicePort);
-        return servicePort;
     }
 
     protected PersistentVolumeClaim createPersistentVolumeClaim(String name) {
@@ -681,131 +824,6 @@ public abstract class AbstractModel {
         return probe;
     }
 
-    protected Service createService(String name, List<ServicePort> ports) {
-        return createService(name, ports, Collections.emptyMap());
-    }
-
-    protected Service createService(String type, List<ServicePort> ports,  Map<String, String> annotations) {
-        Service service = new ServiceBuilder()
-                .withNewMetadata()
-                    .withName(serviceName)
-                    .withLabels(getLabelsWithName(serviceName))
-                    .withNamespace(namespace)
-                    .withAnnotations(annotations)
-                .endMetadata()
-                .withNewSpec()
-                    .withType(type)
-                    .withSelector(getLabelsWithName())
-                    .withPorts(ports)
-                .endSpec()
-                .build();
-        log.trace("Created service {}", service);
-        return service;
-    }
-
-    protected Service createHeadlessService(List<ServicePort> ports) {
-        return createHeadlessService(ports, Collections.emptyMap());
-    }
-
-    protected Service createHeadlessService(List<ServicePort> ports, Map<String, String> annotations) {
-        Service service = new ServiceBuilder()
-                .withNewMetadata()
-                    .withName(headlessServiceName)
-                    .withLabels(getLabelsWithName(headlessServiceName))
-                    .withNamespace(namespace)
-                    .withAnnotations(annotations)
-                .endMetadata()
-                .withNewSpec()
-                    .withType("ClusterIP")
-                    .withClusterIP("None")
-                    .withSelector(getLabelsWithName())
-                    .withPorts(ports)
-                .endSpec()
-                .build();
-        log.trace("Created headless service {}", service);
-        return service;
-    }
-
-    protected StatefulSet createStatefulSet(
-            List<Volume> volumes,
-            List<PersistentVolumeClaim> volumeClaims,
-            List<VolumeMount> volumeMounts,
-            Affinity affinity,
-            List<Container> initContainers,
-            List<Container> containers,
-            boolean isOpenShift) {
-
-        Map<String, String> annotations = new HashMap<>();
-
-        annotations.put(DELETE_CLAIM_ANNOTATION,
-                String.valueOf(storage instanceof PersistentClaimStorage
-                        && ((PersistentClaimStorage) storage).isDeleteClaim()));
-
-
-        List<Container> initContainersInternal = new ArrayList<>();
-        PodSecurityContext securityContext = null;
-        // if a persistent volume claim is requested and the running cluster is a Kubernetes one
-        // there is an hack on volume mounting which needs an "init-container"
-        if (this.storage instanceof PersistentClaimStorage && !isOpenShift) {
-
-            String chown = String.format("chown -R %d:%d %s",
-                    AbstractModel.VOLUME_MOUNT_HACK_GROUPID,
-                    AbstractModel.VOLUME_MOUNT_HACK_GROUPID,
-                    volumeMounts.get(0).getMountPath());
-
-            Container initContainer = new ContainerBuilder()
-                    .withName(AbstractModel.VOLUME_MOUNT_HACK_NAME)
-                    .withImage(AbstractModel.VOLUME_MOUNT_HACK_IMAGE)
-                    .withVolumeMounts(volumeMounts.get(0))
-                    .withCommand("sh", "-c", chown)
-                    .build();
-
-            initContainersInternal.add(initContainer);
-
-            securityContext = new PodSecurityContextBuilder()
-                    .withFsGroup(AbstractModel.VOLUME_MOUNT_HACK_GROUPID)
-                    .build();
-        }
-        // add all the other init containers provided by the specific model implementation
-        if (initContainers != null) {
-            initContainersInternal.addAll(initContainers);
-        }
-
-        StatefulSet statefulSet = new StatefulSetBuilder()
-                .withNewMetadata()
-                    .withName(name)
-                    .withLabels(getLabelsWithName())
-                    .withNamespace(namespace)
-                    .withAnnotations(annotations)
-                .endMetadata()
-                .withNewSpec()
-                    .withPodManagementPolicy("Parallel")
-                    .withUpdateStrategy(new StatefulSetUpdateStrategyBuilder().withType("OnDelete").build())
-                    .withSelector(new LabelSelectorBuilder().withMatchLabels(getLabelsWithName()).build())
-                    .withServiceName(headlessServiceName)
-                    .withReplicas(replicas)
-                    .withNewTemplate()
-                        .withNewMetadata()
-                            .withName(name)
-                            .withLabels(getLabelsWithName())
-                        .endMetadata()
-                        .withNewSpec()
-                            .withServiceAccountName(getServiceAccountName())
-                            .withAffinity(affinity)
-                            .withSecurityContext(securityContext)
-                            .withInitContainers(initContainersInternal)
-                            .withContainers(containers)
-                            .withVolumes(volumes)
-                            .withTolerations(getTolerations())
-                        .endSpec()
-                    .endTemplate()
-                    .withVolumeClaimTemplates(volumeClaims)
-                .endSpec()
-                .build();
-
-        return statefulSet;
-    }
-
     protected Deployment createDeployment(
             DeploymentStrategy updateStrategy,
             Map<String, String> deploymentAnnotations,
@@ -845,25 +863,10 @@ public abstract class AbstractModel {
         return dep;
     }
 
-    /**
-     * Build an environment variable instance with the provided name and value
-     *
-     * @param name The name of the environment variable
-     * @param value The value of the environment variable
-     * @return The environment variable instance
-     */
     protected static EnvVar buildEnvVar(String name, String value) {
         return new EnvVarBuilder().withName(name).withValue(value).build();
     }
 
-    /**
-     * Build an environment variable instance with the provided name from a field reference
-     * using Downward API
-     *
-     * @param name The name of the environment variable
-     * @param field The field path from which getting the value
-     * @return The environment variable instance
-     */
     protected static EnvVar buildEnvVarFromFieldRef(String name, String field) {
 
         EnvVarSource envVarSource = new EnvVarSourceBuilder()
@@ -875,9 +878,6 @@ public abstract class AbstractModel {
         return new EnvVarBuilder().withName(name).withValueFrom(envVarSource).build();
     }
 
-    /**
-     * Gets the given container's environment.
-     */
     public static Map<String, String> containerEnvVars(Container container) {
         return container.getEnv().stream().collect(
             Collectors.toMap(EnvVar::getName, EnvVar::getValue,
@@ -911,23 +911,10 @@ public abstract class AbstractModel {
         return null;
     }
 
-    public void setResources(Resources resources) {
-        this.resources = resources;
-    }
-
     public Resources getResources() {
         return resources;
     }
 
-    public void setJvmOptions(JvmOptions jvmOptions) {
-        this.jvmOptions = jvmOptions;
-    }
-
-    /**
-     * Adds KAFKA_HEAP_OPTS variable to the EnvVar list if any heap related options were specified.
-     *
-     * @param envVars List of Environment Variables
-     */
     protected void heapOptions(List<EnvVar> envVars, double dynamicHeapFraction, long dynamicHeapMaxBytes) {
         StringBuilder kafkaHeapOpts = new StringBuilder();
         String xms = jvmOptions != null ? jvmOptions.getXms() : null;
@@ -954,11 +941,6 @@ public abstract class AbstractModel {
         }
     }
 
-    /**
-     * Adds KAFKA_JVM_PERFORMANCE_OPTS variable to the EnvVar list if any performance related options were specified.
-     *
-     * @param envVars List of Environment Variables
-     */
     protected void jvmPerformanceOptions(List<EnvVar> envVars) {
         StringBuilder jvmPerformanceOpts = new StringBuilder();
         Boolean server = jvmOptions != null ? jvmOptions.getServer() : null;
@@ -988,79 +970,6 @@ public abstract class AbstractModel {
         }
     }
 
-    /**
-     * Decode from Base64 a keyed value from a Secret
-     *
-     * @param secret Secret from which decoding the value
-     * @param key Key of the value to decode
-     * @return decoded value
-     */
-    protected byte[] decodeFromSecret(Secret secret, String key) {
-        return Base64.getDecoder().decode(secret.getData().get(key));
-    }
-
-    /**
-     * Copy already existing certificates from provided Secret based on number of effective replicas
-     * and maybe generate new ones for new replicas (i.e. scale-up)
-     *
-     * @param certManager CertManager instance for handling certificates creation
-     * @param secret The Secret from which getting already existing certificates
-     * @param replicasInSecret How many certificates are in the Secret
-     * @param caCert CA certificate to use for signing new certificates
-     * @param podName A function for resolving the Pod name
-     * @return Collection with certificates
-     * @throws IOException
-     */
-    protected Map<String, CertAndKey> maybeCopyOrGenerateCerts(CertManager certManager, Optional<Secret> secret, int replicasInSecret, CertAndKey caCert, BiFunction<String, Integer, String> podName) throws IOException {
-
-        Map<String, CertAndKey> certs = new HashMap<>();
-
-        // copying the minimum number of certificates already existing in the secret
-        // scale up -> it will copy all certificates
-        // scale down -> it will copy just the requested number of replicas
-        for (int i = 0; i < Math.min(replicasInSecret, replicas); i++) {
-            log.debug("{} already exists", podName.apply(cluster, i));
-            certs.put(
-                    podName.apply(cluster, i),
-                    new CertAndKey(
-                            decodeFromSecret(secret.get(), podName.apply(cluster, i) + ".key"),
-                            decodeFromSecret(secret.get(), podName.apply(cluster, i) + ".crt")));
-        }
-
-        File brokerCsrFile = File.createTempFile("tls", "broker-csr");
-        File brokerKeyFile = File.createTempFile("tls", "broker-key");
-        File brokerCertFile = File.createTempFile("tls", "broker-cert");
-
-        // generate the missing number of certificates
-        // scale up -> generate new certificates for added replicas
-        // scale down -> does nothing
-        for (int i = replicasInSecret; i < replicas; i++) {
-            log.debug("{} to generate", podName.apply(cluster, i));
-
-            Subject sbj = new Subject();
-            sbj.setOrganizationName("io.strimzi");
-            sbj.setCommonName(getName());
-
-            certManager.generateCsr(brokerKeyFile, brokerCsrFile, sbj);
-            certManager.generateCert(brokerCsrFile, caCert.key(), caCert.cert(), brokerCertFile, CERTS_EXPIRATION_DAYS);
-
-            certs.put(podName.apply(cluster, i),
-                    new CertAndKey(Files.readAllBytes(brokerKeyFile.toPath()), Files.readAllBytes(brokerCertFile.toPath())));
-        }
-
-        if (!brokerCsrFile.delete()) {
-            log.warn("{} cannot be deleted", brokerCsrFile.getName());
-        }
-        if (!brokerKeyFile.delete()) {
-            log.warn("{} cannot be deleted", brokerKeyFile.getName());
-        }
-        if (!brokerCertFile.delete()) {
-            log.warn("{} cannot be deleted", brokerCertFile.getName());
-        }
-
-        return certs;
-    }
-
     public static boolean deleteClaim(StatefulSet ss) {
         if (!ss.getSpec().getVolumeClaimTemplates().isEmpty()
                 && ss.getMetadata().getAnnotations() != null) {
@@ -1068,24 +977,6 @@ public abstract class AbstractModel {
         } else {
             return false;
         }
-    }
-
-    /**
-     * Generated a Map with Prometheus annotations
-     *
-     * @return Map with Prometheus annotations using the default port (9404) and path (/metrics)
-     */
-    protected Map<String, String> getPrometheusAnnotations()    {
-        Map<String, String> annotations = new HashMap<String, String>(3);
-        annotations.put("prometheus.io/port", String.valueOf(metricsPort));
-        annotations.put("prometheus.io/scrape", "true");
-        annotations.put("prometheus.io/path", "/metrics");
-
-        return annotations;
-    }
-
-    String getAncillaryConfigMapKeyLogConfig() {
-        return ANCILLARY_CM_KEY_LOG_CONFIG;
     }
 
     public static String getClusterCaName(String cluster)  {

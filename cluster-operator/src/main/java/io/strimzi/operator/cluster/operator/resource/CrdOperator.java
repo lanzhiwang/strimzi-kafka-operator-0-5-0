@@ -23,11 +23,26 @@ public class CrdOperator<C extends KubernetesClient,
     private final Class<L> listCls;
     private final Class<D> doneableCls;
 
-    /**
-     * Constructor
-     * @param vertx The Vertx instance
-     * @param client The Kubernetes client
-     */
+    /*
+    new CrdOperator<>(
+        vertx,
+        client,
+        KafkaAssembly.class,
+        KafkaAssemblyList.class,
+        DoneableKafkaAssembly.class)
+    new CrdOperator<>(
+        vertx,
+        client,
+        KafkaConnectAssembly.class,
+        KafkaConnectAssemblyList.class,
+        DoneableKafkaConnectAssembly.class)
+    new CrdOperator<>(
+        vertx,
+        osClient,
+        KafkaConnectS2IAssembly.class,
+        KafkaConnectS2IAssemblyList.class,
+        DoneableKafkaConnectS2IAssembly.class)
+    */
     public CrdOperator(Vertx vertx, C client, Class<T> cls, Class<L> listCls, Class<D> doneableCls) {
         super(vertx, client, Crds.kind(cls));
         this.cls = cls;

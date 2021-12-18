@@ -23,6 +23,7 @@ public class StatefulSetDiff {
     private static final Logger log = LogManager.getLogger(StatefulSetDiff.class.getName());
 
     private static final List<Pattern> IGNORABLE_PATHS;
+
     static {
         IGNORABLE_PATHS = asList(
             "/spec/revisionHistoryLimit",
@@ -56,8 +57,7 @@ public class StatefulSetDiff {
     }
 
     private static boolean equalsOrPrefix(String path, String pathValue) {
-        return pathValue.equals(path)
-                || pathValue.startsWith(path + "/");
+        return pathValue.equals(path) || pathValue.startsWith(path + "/");
     }
 
     private final boolean changesVolumeClaimTemplate;
@@ -66,8 +66,11 @@ public class StatefulSetDiff {
     private final boolean changesLabels;
     private final boolean changesSpecReplicas;
 
+    // StatefulSetDiff diff = new StatefulSetDiff(current, desired);
     public StatefulSetDiff(StatefulSet current, StatefulSet desired) {
-        JsonNode diff = JsonDiff.asJson(patchMapper().valueToTree(current), patchMapper().valueToTree(desired));
+        JsonNode diff = JsonDiff.asJson(
+            patchMapper().valueToTree(current), patchMapper().valueToTree(desired)
+        );
         int num = 0;
         boolean changesVolumeClaimTemplate = false;
         boolean changesSpecTemplateSpec = false;

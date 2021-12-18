@@ -1,0 +1,166 @@
+
+$ minikube start --image-mirror-country='cn' --iso-url='https://kubernetes.oss-cn-hangzhou.aliyuncs.com/minikube/iso/minikube-v1.14.0.iso' --driver='hyperkit' --memory='4g'
+
+$ eval $(minikube -p minikube docker-env)
+
+$ docker pull centos:7
+
+$ sed -i '' 's/namespace: .*/namespace: default/' examples/test/cluster-operator/*ClusterRoleBinding*.yaml
+
+$ kubectl apply -f examples/test/cluster-operator/
+
+
+
+$ MVN_ARGS="-Dmaven.javadoc.skip=true -DskipITs -DskipTests" make all -n
+
+# docker-images
+/Library/Developer/CommandLineTools/usr/bin/make -C docker-images all
+    # java-base
+    /Library/Developer/CommandLineTools/usr/bin/make -C java-base all
+    # Build Docker image ...
+    docker build -q --build-arg strimzi_version=0.5.0 -t strimzi/java-base:latest ./
+    # Tag the "latest" image we built with the given tag
+    docker tag strimzi/java-base:latest docker.io/huzhi/java-base:latest
+    # Push the tagged image to the registry
+    # docker push docker.io/huzhi/java-base:latest
+
+    # kafka-base
+    /Library/Developer/CommandLineTools/usr/bin/make -C kafka-base all
+    # Build Docker image ...
+    docker build -q --build-arg strimzi_version=0.5.0 -t strimzi/kafka-base:latest ./
+    # Tag the "latest" image we built with the given tag
+    docker tag strimzi/kafka-base:latest docker.io/huzhi/kafka-base:latest
+    # Push the tagged image to the registry
+    # docker push docker.io/huzhi/kafka-base:latest
+
+    # zookeeper
+    /Library/Developer/CommandLineTools/usr/bin/make -C zookeeper all
+    # Build Docker image ...
+    docker build -q --build-arg strimzi_version=0.5.0 -t strimzi/zookeeper:latest ./
+    # Tag the "latest" image we built with the given tag
+    docker tag strimzi/zookeeper:latest docker.io/huzhi/zookeeper:latest
+    # Push the tagged image to the registry
+    # docker push docker.io/huzhi/zookeeper:latest
+
+    # kafka
+    /Library/Developer/CommandLineTools/usr/bin/make -C kafka all
+    # Build Docker image ...
+    docker build -q --build-arg strimzi_version=0.5.0 -t strimzi/kafka:latest ./
+    # Tag the "latest" image we built with the given tag
+    docker tag strimzi/kafka:latest docker.io/huzhi/kafka:latest
+    # Push the tagged image to the registry
+    # docker push docker.io/huzhi/kafka:latest
+
+    # kafka-connect
+    /Library/Developer/CommandLineTools/usr/bin/make -C kafka-connect all
+    # Build Docker image ...
+    docker build -q --build-arg strimzi_version=0.5.0 -t strimzi/kafka-connect:latest ./
+    # Tag the "latest" image we built with the given tag
+    docker tag strimzi/kafka-connect:latest docker.io/huzhi/kafka-connect:latest
+    # Push the tagged image to the registry
+    # docker push docker.io/huzhi/kafka-connect:latest
+
+    # kafka-connect/s2i
+    /Library/Developer/CommandLineTools/usr/bin/make -C kafka-connect/s2i all
+    # Build Docker image ...
+    docker build -q --build-arg strimzi_version=0.5.0 -t strimzi/kafka-connect-s2i:latest ./
+    # Tag the "latest" image we built with the given tag
+    docker tag strimzi/kafka-connect-s2i:latest docker.io/huzhi/kafka-connect-s2i:latest
+    # Push the tagged image to the registry
+    # docker push docker.io/huzhi/kafka-connect-s2i:latest
+
+    # stunnel-base
+    /Library/Developer/CommandLineTools/usr/bin/make -C stunnel-base all
+    # Build Docker image ...
+    docker build -q --build-arg strimzi_version=0.5.0 -t strimzi/stunnel-base:latest ./
+    # Tag the "latest" image we built with the given tag
+    docker tag strimzi/stunnel-base:latest docker.io/huzhi/stunnel-base:latest
+    # Push the tagged image to the registry
+    # docker push docker.io/huzhi/stunnel-base:latest
+
+    # zookeeper-stunnel
+    /Library/Developer/CommandLineTools/usr/bin/make -C zookeeper-stunnel all
+    # Build Docker image ...
+    docker build -q --build-arg strimzi_version=0.5.0 -t strimzi/zookeeper-stunnel:latest ./
+    # Tag the "latest" image we built with the given tag
+    docker tag strimzi/zookeeper-stunnel:latest docker.io/huzhi/zookeeper-stunnel:latest
+    # Push the tagged image to the registry
+    # docker push docker.io/huzhi/zookeeper-stunnel:latest
+
+    # kafka-stunnel
+    /Library/Developer/CommandLineTools/usr/bin/make -C kafka-stunnel all
+    # Build Docker image ...
+    docker build -q --build-arg strimzi_version=0.5.0 -t strimzi/kafka-stunnel:latest ./
+    # Tag the "latest" image we built with the given tag
+    docker tag strimzi/kafka-stunnel:latest docker.io/huzhi/kafka-stunnel:latest
+    # Push the tagged image to the registry
+    # docker push docker.io/huzhi/kafka-stunnel:latest
+
+    # topic-operator-stunnel
+    /Library/Developer/CommandLineTools/usr/bin/make -C topic-operator-stunnel all
+    # Build Docker image ...
+    docker build -q --build-arg strimzi_version=0.5.0 -t strimzi/topic-operator-stunnel:latest ./
+    # Tag the "latest" image we built with the given tag
+    docker tag strimzi/topic-operator-stunnel:latest docker.io/huzhi/topic-operator-stunnel:latest
+    # Push the tagged image to the registry
+    # docker push docker.io/huzhi/topic-operator-stunnel:latest
+
+# certificate-manager
+/Library/Developer/CommandLineTools/usr/bin/make -C certificate-manager all
+echo "Installing root pom ..."
+mvn -q -Dmaven.javadoc.skip=true -DskipITs -DskipTests install -f ../pom.xml -N
+echo "Installing JAR files ..."
+mvn -q -Dmaven.javadoc.skip=true -DskipITs -DskipTests install
+
+# crd-generator
+/Library/Developer/CommandLineTools/usr/bin/make -C crd-generator all
+echo "Installing root pom ..."
+mvn -q -Dmaven.javadoc.skip=true -DskipITs -DskipTests install -f ../pom.xml -N
+echo "Installing JAR files ..."
+mvn -q -Dmaven.javadoc.skip=true -DskipITs -DskipTests install
+
+# api
+/Library/Developer/CommandLineTools/usr/bin/make -C api all
+echo "Installing root pom ..."
+mvn -q -Dmaven.javadoc.skip=true -DskipITs -DskipTests install -f ../pom.xml -N
+echo "Installing JAR files ..."
+mvn -q -Dmaven.javadoc.skip=true -DskipITs -DskipTests install
+
+# cluster-operator
+/Library/Developer/CommandLineTools/usr/bin/make -C cluster-operator all
+echo "Building JAR file ..."
+mvn -q -Dmaven.javadoc.skip=true -DskipITs -DskipTests verify
+# Build Docker image ...
+docker build -q --build-arg strimzi_version=0.5.0 -t strimzi/cluster-operator:latest ./
+# Tag the "latest" image we built with the given tag
+docker tag strimzi/cluster-operator:latest docker.io/huzhi/cluster-operator:latest
+# Push the tagged image to the registry
+# docker push docker.io/huzhi/cluster-operator:latest
+
+# topic-operator
+/Library/Developer/CommandLineTools/usr/bin/make -C topic-operator all
+echo "Building JAR file ..."
+mvn -q -Dmaven.javadoc.skip=true -DskipITs -DskipTests verify
+# Build Docker image ...
+docker build -q --build-arg strimzi_version=0.5.0 -t strimzi/topic-operator:latest ./
+# Tag the "latest" image we built with the given tag
+docker tag strimzi/topic-operator:latest docker.io/huzhi/topic-operator:latest
+# Push the tagged image to the registry
+# docker push docker.io/huzhi/topic-operator:latest
+
+# kafka-init
+/Library/Developer/CommandLineTools/usr/bin/make -C kafka-init all
+echo "Building JAR file ..."
+mvn -q -Dmaven.javadoc.skip=true -DskipITs -DskipTests verify
+# Build Docker image ...
+docker build -q --build-arg strimzi_version=0.5.0 -t strimzi/kafka-init:latest ./
+# Tag the "latest" image we built with the given tag
+docker tag strimzi/kafka-init:latest docker.io/huzhi/kafka-init:latest
+# Push the tagged image to the registry
+# docker push docker.io/huzhi/kafka-init:latest
+
+# examples
+/Library/Developer/CommandLineTools/usr/bin/make -C examples all
+make[1]: Nothing to be done for `all'.
+$
+

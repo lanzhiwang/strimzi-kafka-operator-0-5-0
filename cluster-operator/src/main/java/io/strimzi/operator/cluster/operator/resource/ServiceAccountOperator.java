@@ -15,11 +15,6 @@ import io.vertx.core.Vertx;
 
 public class ServiceAccountOperator extends AbstractResourceOperator<KubernetesClient, ServiceAccount, ServiceAccountList, DoneableServiceAccount, Resource<ServiceAccount, DoneableServiceAccount>> {
 
-    /**
-     * Constructor
-     * @param vertx The Vertx instance
-     * @param client The Kubernetes client
-     */
     public ServiceAccountOperator(Vertx vertx, KubernetesClient client) {
         super(vertx, client, "ServiceAccount");
     }

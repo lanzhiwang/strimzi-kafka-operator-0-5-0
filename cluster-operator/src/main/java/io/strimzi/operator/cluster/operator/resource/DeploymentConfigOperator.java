@@ -13,15 +13,9 @@ import io.fabric8.openshift.client.dsl.DeployableScalableResource;
 import io.vertx.core.Future;
 import io.vertx.core.Vertx;
 
-/**
- * Operations for {@code DeploymentConfigs}s.
- */
+
 public class DeploymentConfigOperator extends AbstractScalableResourceOperator<OpenShiftClient, DeploymentConfig, DeploymentConfigList, DoneableDeploymentConfig, DeployableScalableResource<DeploymentConfig, DoneableDeploymentConfig>> {
-    /**
-     * Constructor
-     * @param vertx The Vertx instance
-     * @param client The Kubernetes client
-     */
+
     public DeploymentConfigOperator(Vertx vertx, OpenShiftClient client) {
         super(vertx, client, "DeploymentConfig");
     }

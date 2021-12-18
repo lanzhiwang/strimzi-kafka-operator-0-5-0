@@ -13,15 +13,8 @@ import io.fabric8.kubernetes.client.dsl.Resource;
 import io.vertx.core.Future;
 import io.vertx.core.Vertx;
 
-/**
- * Operations for {@code PersistentVolumeClaim}s.
- */
 public class PvcOperator extends AbstractResourceOperator<KubernetesClient, PersistentVolumeClaim, PersistentVolumeClaimList, DoneablePersistentVolumeClaim, Resource<PersistentVolumeClaim, DoneablePersistentVolumeClaim>> {
-    /**
-     * Constructor
-     * @param vertx The Vertx instance
-     * @param client The Kubernetes client
-     */
+
     public PvcOperator(Vertx vertx, KubernetesClient client) {
         super(vertx, client, "PersistentVolumeClaim");
     }

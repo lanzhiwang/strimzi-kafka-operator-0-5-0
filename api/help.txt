@@ -1,0 +1,30 @@
+public class KafkaAssembly extends CustomResource {
+    public class KafkaAssemblySpec {
+        public class Kafka extends ReplicatedJvmPods {
+            public abstract class Storage {}
+            public class Rack {}
+            public abstract class Logging {}
+            public class Sidecar {}
+        }
+        public class Zookeeper extends ReplicatedJvmPods {
+            public abstract class Storage {}
+            public abstract class Logging {}
+            public class Sidecar {}
+        }
+        public class TopicOperator {
+            public class Resources {}
+            public abstract class Logging {}
+            public class Sidecar {}
+        }
+    }
+}
+
+public class KafkaConnectAssembly extends CustomResource {
+    public class KafkaConnectAssemblySpec extends ReplicatedJvmPods {
+        public abstract class Logging {}
+    }
+}
+
+public class KafkaConnectS2IAssembly extends CustomResource {
+    public class KafkaConnectS2IAssemblySpec extends KafkaConnectAssemblySpec {}
+}

@@ -11,6 +11,7 @@ public abstract class ReconcileResult<R> {
             return "DELETED";
         }
     };
+
     private static final ReconcileResult NOOP = new ReconcileResult(null) {
         public String toString() {
             return "NOOP";
@@ -38,28 +39,33 @@ public abstract class ReconcileResult<R> {
         }
     }
 
-    /** The resource was patched. */
+    // ReconcileResult.Patched<T> result = ReconcileResult.patched(
+    //     operation().inNamespace(namespace).withName(name).cascading(true).patch(desired)
+    // );
     public static final <D> Patched<D> patched(D resource) {
         return new Patched(resource);
     }
 
-    /** The resource was created. */
+    // ReconcileResult<T> result = ReconcileResult.created(
+    //     operation().inNamespace(namespace).withName(name).create(desired)
+    // );
     public static final <D> ReconcileResult<D> created(D resource) {
         return new Created<>(resource);
     }
 
-    /** The resource was deleted. */
+    // ReconcileResult.deleted()
     public static final <P> ReconcileResult<P> deleted() {
         return DELETED;
     }
 
-    /** No action was performed. */
+    // ReconcileResult.noop()
     public static final <P> ReconcileResult<P> noop() {
         return NOOP;
     }
 
     private final R resource;
 
+    // Resource<ServiceAccount, DoneableServiceAccount>> R
     private ReconcileResult(R resource) {
         this.resource = resource;
     }

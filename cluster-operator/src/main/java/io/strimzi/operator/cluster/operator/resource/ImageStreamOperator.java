@@ -12,15 +12,8 @@ import io.fabric8.openshift.api.model.ImageStreamList;
 import io.fabric8.openshift.client.OpenShiftClient;
 import io.vertx.core.Vertx;
 
-/**
- * Operations for {@code ImageStream}s.
- */
 public class ImageStreamOperator extends AbstractResourceOperator<OpenShiftClient, ImageStream, ImageStreamList, DoneableImageStream, Resource<ImageStream, DoneableImageStream>> {
-    /**
-     * Constructor
-     * @param vertx The Vertx instance
-     * @param client The OpenShift client
-     */
+
     public ImageStreamOperator(Vertx vertx, OpenShiftClient client) {
         super(vertx, client, "ImageStream");
     }

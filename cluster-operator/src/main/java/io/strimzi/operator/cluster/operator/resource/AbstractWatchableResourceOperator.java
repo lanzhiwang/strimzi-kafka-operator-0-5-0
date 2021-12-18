@@ -21,13 +21,7 @@ public abstract class AbstractWatchableResourceOperator<
         R extends Resource<T, D>>
         extends AbstractResourceOperator<C, T, L, D, R> {
 
-    /**
-     * Constructor.
-     *
-     * @param vertx        The vertx instance.
-     * @param client       The kubernetes client.
-     * @param resourceKind The mind of Kubernetes resource (used for logging).
-     */
+    // super(vertx, client, Crds.kind(cls));
     public AbstractWatchableResourceOperator(Vertx vertx, C client, String resourceKind) {
         super(vertx, client, resourceKind);
     }

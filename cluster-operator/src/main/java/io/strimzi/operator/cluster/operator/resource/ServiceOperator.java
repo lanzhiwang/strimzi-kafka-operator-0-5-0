@@ -13,17 +13,10 @@ import io.fabric8.kubernetes.client.dsl.Resource;
 import io.vertx.core.Future;
 import io.vertx.core.Vertx;
 
-/**
- * Operations for {@code Service}s.
- */
 public class ServiceOperator extends AbstractResourceOperator<KubernetesClient, Service, ServiceList, DoneableService, Resource<Service, DoneableService>> {
 
     private final EndpointOperator endpointOperations;
-    /**
-     * Constructor
-     * @param vertx The Vertx instance
-     * @param client The Kubernetes client
-     */
+
     public ServiceOperator(Vertx vertx, KubernetesClient client) {
         super(vertx, client, "Service");
         this.endpointOperations = new EndpointOperator(vertx, client);
@@ -35,6 +28,11 @@ public class ServiceOperator extends AbstractResourceOperator<KubernetesClient, 
     }
 
     public Future<Void> endpointReadiness(String namespace, Service desired, long pollInterval, long operationTimeoutMs) {
-        return endpointOperations.readiness(namespace, desired.getMetadata().getName(), 1_000, operationTimeoutMs);
+        return endpointOperations.readiness(
+            namespace,
+            desired.getMetadata().getName(),
+            1_000,
+            operationTimeoutMs
+        );
     }
 }

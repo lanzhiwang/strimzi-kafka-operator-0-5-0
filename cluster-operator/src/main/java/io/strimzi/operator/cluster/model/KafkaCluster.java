@@ -110,92 +110,41 @@ public class KafkaCluster extends AbstractModel {
      */
     private Map<String, CertAndKey> brokerCerts;
 
-    /**
-     * Constructor
-     *
-     * @param namespace Kubernetes/OpenShift namespace where Kafka cluster resources are going to be created
-     * @param cluster  overall cluster name
-     */
-    private KafkaCluster(String namespace, String cluster, Labels labels) {
-        super(namespace, cluster, labels);
-        this.name = kafkaClusterName(cluster);
-        this.serviceName = serviceName(cluster);
-        this.headlessServiceName = headlessServiceName(cluster);
-        this.ancillaryConfigName = metricAndLogConfigsName(cluster);
-        this.image = Kafka.DEFAULT_IMAGE;
-        this.replicas = DEFAULT_REPLICAS;
-        this.readinessTimeout = DEFAULT_HEALTHCHECK_TIMEOUT;
-        this.readinessInitialDelay = DEFAULT_HEALTHCHECK_DELAY;
-        this.livenessTimeout = DEFAULT_HEALTHCHECK_TIMEOUT;
-        this.livenessInitialDelay = DEFAULT_HEALTHCHECK_DELAY;
-        this.isMetricsEnabled = DEFAULT_KAFKA_METRICS_ENABLED;
-
-        setZookeeperConnect(ZookeeperCluster.serviceName(cluster) + ":2181");
-
-        this.mountPath = "/var/lib/kafka";
-
-        this.logAndMetricsConfigVolumeName = "kafka-metrics-and-logging";
-        this.logAndMetricsConfigMountPath = "/opt/kafka/custom-config/";
-
-        this.initImage = Kafka.DEFAULT_INIT_IMAGE;
-        this.validLoggerFields = getDefaultLogConfig();
-    }
-
-    public static String kafkaClusterName(String cluster) {
-        return cluster + KafkaCluster.NAME_SUFFIX;
-    }
-
-    public static String metricAndLogConfigsName(String cluster) {
-        return cluster + KafkaCluster.METRICS_AND_LOG_CONFIG_SUFFIX;
-    }
-
-    public static String serviceName(String cluster) {
-        return cluster + KafkaCluster.SERVICE_NAME_SUFFIX;
-    }
-
-    public static String headlessServiceName(String cluster) {
-        return cluster + KafkaCluster.HEADLESS_SERVICE_NAME_SUFFIX;
-    }
-
-    public static String kafkaPodName(String cluster, int pod) {
-        return kafkaClusterName(cluster) + "-" + pod;
-    }
-
-    public static String clientsCASecretName(String cluster) {
-        return cluster + KafkaCluster.SECRET_CLIENTS_CA_SUFFIX;
-    }
-
-    public static String brokersSecretName(String cluster) {
-        return cluster + KafkaCluster.SECRET_BROKERS_SUFFIX;
-    }
-
-    public static String clientsPublicKeyName(String cluster) {
-        return cluster + KafkaCluster.SECRET_CLIENTS_PUBLIC_KEY_SUFFIX;
-    }
-
-    public static String clusterPublicKeyName(String cluster) {
-        return getClusterCaName(cluster) + KafkaCluster.SECRET_CLUSTER_PUBLIC_KEY_SUFFIX;
-    }
-
     public static KafkaCluster fromCrd(CertManager certManager, KafkaAssembly kafkaAssembly, List<Secret> secrets) {
-        KafkaCluster result = new KafkaCluster(kafkaAssembly.getMetadata().getNamespace(),
-                kafkaAssembly.getMetadata().getName(),
-                Labels.fromResource(kafkaAssembly).withKind(kafkaAssembly.getKind()));
+        KafkaCluster result = new KafkaCluster(
+            kafkaAssembly.getMetadata().getNamespace(),
+            kafkaAssembly.getMetadata().getName(),
+            Labels.fromResource(kafkaAssembly).withKind(kafkaAssembly.getKind())
+        );
+
         Kafka kafka = kafkaAssembly.getSpec().getKafka();
+
         result.setReplicas(kafka.getReplicas());
+
         String image = kafka.getImage();
         if (image == null) {
             image = Kafka.DEFAULT_IMAGE;
         }
         result.setImage(image);
+
         if (kafka.getReadinessProbe() != null) {
-            result.setReadinessInitialDelay(kafka.getReadinessProbe().getInitialDelaySeconds());
-            result.setReadinessTimeout(kafka.getReadinessProbe().getTimeoutSeconds());
+            result.setReadinessInitialDelay(
+                kafka.getReadinessProbe().getInitialDelaySeconds()
+            );
+            result.setReadinessTimeout(
+                kafka.getReadinessProbe().getTimeoutSeconds()
+            );
         }
+
         if (kafka.getLivenessProbe() != null) {
-            result.setLivenessInitialDelay(kafka.getLivenessProbe().getInitialDelaySeconds());
-            result.setLivenessTimeout(kafka.getLivenessProbe().getTimeoutSeconds());
+            result.setLivenessInitialDelay(
+                kafka.getLivenessProbe().getInitialDelaySeconds()
+            );
+            result.setLivenessTimeout(
+                kafka.getLivenessProbe().getTimeoutSeconds()
+            );
         }
+
         result.setRack(kafka.getRack());
 
         String initImage = kafka.getBrokerRackInitImage();
@@ -203,46 +152,124 @@ public class KafkaCluster extends AbstractModel {
             initImage = Kafka.DEFAULT_INIT_IMAGE;
         }
         result.setInitImage(initImage);
+
         result.setLogging(kafka.getLogging());
+
         result.setJvmOptions(kafka.getJvmOptions());
+
         result.setConfiguration(new KafkaConfiguration(kafka.getConfig().entrySet()));
+
         Map<String, Object> metrics = kafka.getMetrics();
         if (metrics != null && !metrics.isEmpty()) {
             result.setMetricsEnabled(true);
             result.setMetricsConfig(metrics.entrySet());
         }
+
         result.setStorage(kafka.getStorage());
+
         result.setUserAffinity(kafka.getAffinity());
+
         result.setResources(kafka.getResources());
+
         result.setTolerations(kafka.getTolerations());
 
         result.generateCertificates(certManager, secrets);
+
         result.setTlsSidecar(kafka.getTlsSidecar());
 
         return result;
     }
 
-    /**
-     * Manage certificates generation based on those already present in the Secrets
-     *
-     * @param certManager CertManager instance for handling certificates creation
-     * @param secrets The Secrets storing certificates
-     */
+    // cluster = my-cluster
+    private KafkaCluster(String namespace, String cluster, Labels labels) {
+        super(namespace, cluster, labels);
+        this.name = kafkaClusterName(cluster);  // my-cluster-kafka
+        this.serviceName = serviceName(cluster);  // my-cluster-kafka-bootstrap
+        this.headlessServiceName = headlessServiceName(cluster);  // my-cluster-kafka-brokers
+        this.ancillaryConfigName = metricAndLogConfigsName(cluster);  // my-cluster-kafka-config
+        this.image = Kafka.DEFAULT_IMAGE;  // io.strimzi.api.kafka.model.Kafka;
+        this.replicas = DEFAULT_REPLICAS;  // DEFAULT_REPLICAS = 3;
+        this.readinessTimeout = DEFAULT_HEALTHCHECK_TIMEOUT;  // DEFAULT_HEALTHCHECK_TIMEOUT = 5;
+        this.readinessInitialDelay = DEFAULT_HEALTHCHECK_DELAY;  // DEFAULT_HEALTHCHECK_DELAY = 15;
+        this.livenessTimeout = DEFAULT_HEALTHCHECK_TIMEOUT;  // DEFAULT_HEALTHCHECK_TIMEOUT = 5;
+        this.livenessInitialDelay = DEFAULT_HEALTHCHECK_DELAY;  // DEFAULT_HEALTHCHECK_DELAY = 15;
+        this.isMetricsEnabled = DEFAULT_KAFKA_METRICS_ENABLED;  // DEFAULT_KAFKA_METRICS_ENABLED = false;
+
+        setZookeeperConnect(ZookeeperCluster.serviceName(cluster) + ":2181");  // my-cluster-zookeeper-client:2181
+
+        this.mountPath = "/var/lib/kafka";
+
+        this.logAndMetricsConfigVolumeName = "kafka-metrics-and-logging";
+        this.logAndMetricsConfigMountPath = "/opt/kafka/custom-config/";
+
+        this.initImage = Kafka.DEFAULT_INIT_IMAGE;
+        this.validLoggerFields = getDefaultLogConfig();  // protected Properties getDefaultLogConfig() {
+    }
+
+    public static String kafkaClusterName(String cluster) {
+        // private static final String NAME_SUFFIX = "-kafka";
+        return cluster + KafkaCluster.NAME_SUFFIX;
+    }
+
+    public static String serviceName(String cluster) {
+        // private static final String NAME_SUFFIX = "-kafka";
+        // private static final String SERVICE_NAME_SUFFIX = NAME_SUFFIX + "-bootstrap";
+        return cluster + KafkaCluster.SERVICE_NAME_SUFFIX;
+    }
+
+    public static String headlessServiceName(String cluster) {
+        // private static final String NAME_SUFFIX = "-kafka";
+        // private static final String HEADLESS_SERVICE_NAME_SUFFIX = NAME_SUFFIX + "-brokers";
+        return cluster + KafkaCluster.HEADLESS_SERVICE_NAME_SUFFIX;
+    }
+
+    public static String metricAndLogConfigsName(String cluster) {
+        // private static final String NAME_SUFFIX = "-kafka";
+        // protected static final String METRICS_AND_LOG_CONFIG_SUFFIX = NAME_SUFFIX + "-config";
+        return cluster + KafkaCluster.METRICS_AND_LOG_CONFIG_SUFFIX;
+    }
+
+    // zookeeperConnect = my-cluster-zookeeper-client:2181
+    protected void setZookeeperConnect(String zookeeperConnect) {
+        this.zookeeperConnect = zookeeperConnect;  // my-cluster-zookeeper-client:2181
+    }
+
+    @Override
+    protected String getDefaultLogConfigFileName() {
+        return "kafkaDefaultLoggingProperties";
+    }
+
+    protected void setRack(Rack rack) {
+        this.rack = rack;
+    }
+
+    protected void setInitImage(String initImage) {
+        this.initImage = initImage;
+    }
+
     public void generateCertificates(CertManager certManager, List<Secret> secrets) {
         log.debug("Generating certificates");
 
         try {
-            Optional<Secret> clusterCAsecret = secrets.stream().filter(s -> s.getMetadata().getName().equals(getClusterCaName(cluster)))
-                    .findFirst();
-            if (clusterCAsecret.isPresent()) {
+            // my-cluster-cert
+            Optional<Secret> clusterCAsecret = secrets.stream().filter(
+                s -> s.getMetadata().getName().equals(getClusterCaName(cluster))
+            ).findFirst();
+
+            if (clusterCAsecret.isPresent()) {  // my-cluster-cert secret 存在
                 // get the generated CA private key + self-signed certificate for each broker
                 clusterCA = new CertAndKey(
-                        decodeFromSecret(clusterCAsecret.get(), "cluster-ca.key"),
-                        decodeFromSecret(clusterCAsecret.get(), "cluster-ca.crt"));
+                    decodeFromSecret(clusterCAsecret.get(), "cluster-ca.key"),
+                    decodeFromSecret(clusterCAsecret.get(), "cluster-ca.crt")
+                );
 
                 // CA private key + self-signed certificate for clients communications
-                Optional<Secret> clientsCAsecret = secrets.stream().filter(s -> s.getMetadata().getName().equals(KafkaCluster.clientsCASecretName(cluster))).findFirst();
-                if (!clientsCAsecret.isPresent()) {
+                // my-cluster-clients-ca
+                Optional<Secret> clientsCAsecret = secrets.stream().filter(
+                    s -> s.getMetadata().getName().equals(KafkaCluster.clientsCASecretName(cluster))
+                ).findFirst();
+
+                if (!clientsCAsecret.isPresent()) {  // my-cluster-clients-ca secret 不存在
                     log.debug("Clients CA to generate");
                     File clientsCAkeyFile = File.createTempFile("tls", "clients-ca-key");
                     File clientsCAcertFile = File.createTempFile("tls", "clients-ca-cert");
@@ -251,9 +278,16 @@ public class KafkaCluster extends AbstractModel {
                     sbj.setOrganizationName("io.strimzi");
                     sbj.setCommonName("kafka-clients-ca");
 
-                    certManager.generateSelfSignedCert(clientsCAkeyFile, clientsCAcertFile, sbj, CERTS_EXPIRATION_DAYS);
-                    clientsCA =
-                            new CertAndKey(Files.readAllBytes(clientsCAkeyFile.toPath()), Files.readAllBytes(clientsCAcertFile.toPath()));
+                    certManager.generateSelfSignedCert(
+                        clientsCAkeyFile,
+                        clientsCAcertFile,
+                        sbj,
+                        CERTS_EXPIRATION_DAYS
+                    );
+                    clientsCA = new CertAndKey(
+                        Files.readAllBytes(clientsCAkeyFile.toPath()),
+                        Files.readAllBytes(clientsCAcertFile.toPath())
+                    );
                     if (!clientsCAkeyFile.delete()) {
                         log.warn("{} cannot be deleted", clientsCAkeyFile.getName());
                     }
@@ -263,17 +297,21 @@ public class KafkaCluster extends AbstractModel {
                 } else {
                     log.debug("Clients CA already exists");
                     clientsCA = new CertAndKey(
-                            decodeFromSecret(clientsCAsecret.get(), "clients-ca.key"),
-                            decodeFromSecret(clientsCAsecret.get(), "clients-ca.crt"));
+                        decodeFromSecret(clientsCAsecret.get(), "clients-ca.key"),
+                        decodeFromSecret(clientsCAsecret.get(), "clients-ca.crt")
+                    );
                 }
 
                 // recover or generates the private key + certificate for each broker for internal and clients communication
-                Optional<Secret> clusterSecret = secrets.stream().filter(s -> s.getMetadata().getName().equals(KafkaCluster.brokersSecretName(cluster)))
-                        .findFirst();
+                // // my-cluster-kafka-brokers
+                Optional<Secret> clusterSecret = secrets.stream().filter(
+                    s -> s.getMetadata().getName().equals(KafkaCluster.brokersSecretName(cluster))
+                ).findFirst();
 
                 int replicasInternalSecret = !clusterSecret.isPresent() ? 0 : (clusterSecret.get().getData().size() - 1) / 2;
 
                 log.debug("Internal communication certificates");
+                // private Map<String, CertAndKey> brokerCerts;
                 brokerCerts = maybeCopyOrGenerateCerts(certManager, clusterSecret, replicasInternalSecret, clusterCA, KafkaCluster::kafkaPodName);
             } else {
                 throw new NoCertificateSecretException("The cluster CA certificate Secret is missing");
@@ -286,14 +324,54 @@ public class KafkaCluster extends AbstractModel {
         log.debug("End generating certificates");
     }
 
+    protected void setTlsSidecar(Sidecar tlsSidecar) {
+        this.tlsSidecar = tlsSidecar;
+    }
+
+    public static String clusterPublicKeyName(String cluster) {
+        // private static final String SECRET_CLUSTER_PUBLIC_KEY_SUFFIX = "-cert";
+        return getClusterCaName(cluster) + KafkaCluster.SECRET_CLUSTER_PUBLIC_KEY_SUFFIX;  // my-cluster-cert
+    }
+
+    public static String clientsCASecretName(String cluster) {
+        // private static final String SECRET_CLIENTS_CA_SUFFIX = "-clients-ca";
+        return cluster + KafkaCluster.SECRET_CLIENTS_CA_SUFFIX;  // my-cluster-clients-ca
+    }
+
+    public static String brokersSecretName(String cluster) {
+        // private static final String NAME_SUFFIX = "-kafka";
+        // private static final String SECRET_BROKERS_SUFFIX = NAME_SUFFIX + "-brokers";
+        return cluster + KafkaCluster.SECRET_BROKERS_SUFFIX;  // my-cluster-kafka-brokers
+    }
+
+    public static String kafkaPodName(String cluster, int pod) {
+        return kafkaClusterName(cluster) + "-" + pod;  // my-cluster-kafka-0  my-cluster-kafka-1  my-cluster-kafka-2
+    }
+
     /**
-     * Generates ports for bootstrap service.
-     * The bootstrap service contains only the client interfaces.
-     * Not the replication interface which doesn't need bootstrap service.
-     *
-     * @return List with generated ports
+    getLogging()
+    generateMetricsAndLogConfigMap()  // todo
+    generateService()
+    generateHeadlessService()
+    generateStatefulSet(isOpenShift)
+    generateClientsCASecret()
+    generateClientsPublicKeySecret()
+    generateClusterPublicKeySecret()
+    generateBrokersSecret()
      */
+
+    public Service generateService() {
+        // createService("ClusterIP", List<ServicePort>, Map<String, String>)
+        return createService("ClusterIP", getServicePorts(), getPrometheusAnnotations());
+    }
+
     private List<ServicePort> getServicePorts() {
+        /**
+        createServicePort(clients, 9092, 9092, "TCP")
+        createServicePort(clientstls, 9093, 9093, "TCP")
+        createServicePort(replication, 9091, 9091, "TCP")
+        createServicePort(kafkametrics, 9404, 9404, "TCP")
+         */
         List<ServicePort> ports = new ArrayList<>(2);
         ports.add(createServicePort(CLIENT_PORT_NAME, CLIENT_PORT, CLIENT_PORT, "TCP"));
         ports.add(createServicePort(CLIENT_TLS_PORT_NAME, CLIENT_TLS_PORT, CLIENT_TLS_PORT, "TCP"));
@@ -304,12 +382,11 @@ public class KafkaCluster extends AbstractModel {
         return ports;
     }
 
-    /**
-     * Generates ports for headless service.
-     * The headless service contains both the client interfaces as well as replication interface.
-     *
-     * @return List with generated ports
-     */
+    public Service generateHeadlessService() {
+        Map<String, String> annotations = Collections.singletonMap("service.alpha.kubernetes.io/tolerate-unready-endpoints", "true");
+        return createHeadlessService(getHeadlessServicePorts(), annotations);
+    }
+
     private List<ServicePort> getHeadlessServicePorts() {
         List<ServicePort> ports = new ArrayList<>(2);
         ports.add(createServicePort(CLIENT_PORT_NAME, CLIENT_PORT, CLIENT_PORT, "TCP"));
@@ -318,105 +395,17 @@ public class KafkaCluster extends AbstractModel {
         return ports;
     }
 
-    /**
-     * Generates a Service according to configured defaults
-     * @return The generated Service
-     */
-    public Service generateService() {
-        return createService("ClusterIP", getServicePorts(), getPrometheusAnnotations());
-    }
-
-    /**
-     * Generates a headless Service according to configured defaults
-     * @return The generated Service
-     */
-    public Service generateHeadlessService() {
-        Map<String, String> annotations = Collections.singletonMap("service.alpha.kubernetes.io/tolerate-unready-endpoints", "true");
-        return createHeadlessService(getHeadlessServicePorts(), annotations);
-    }
-
-    /**
-     * Generates a StatefulSet according to configured defaults
-     * @param isOpenShift True iff this operator is operating within OpenShift.
-     * @return The generate StatefulSet
-     */
     public StatefulSet generateStatefulSet(boolean isOpenShift) {
-
+        // createStatefulSet(List<Volume>, List<PersistentVolumeClaim>, List<VolumeMount>, Affinity, List<Container>, List<Container>)
         return createStatefulSet(
-                getVolumes(),
-                getVolumeClaims(),
-                getVolumeMounts(),
-                getMergedAffinity(),
-                getInitContainers(),
-                getContainers(),
-                isOpenShift);
-    }
-
-    /**
-     * Generate the Secret containing CA private key and self-signed certificate used
-     * for signing brokers certificates used for communication with clients
-     * @return The generated Secret
-     */
-    public Secret generateClientsCASecret() {
-        Map<String, String> data = new HashMap<>();
-        data.put("clients-ca.key", Base64.getEncoder().encodeToString(clientsCA.key()));
-        data.put("clients-ca.crt", Base64.getEncoder().encodeToString(clientsCA.cert()));
-        return createSecret(KafkaCluster.clientsCASecretName(cluster), data);
-    }
-
-    /**
-     * Generate the Secret containing just the self-signed CA certificate used
-     * for signing client certificates. It is used for the broker truststore.
-     * @return The generated Secret
-     */
-    public Secret generateClientsPublicKeySecret() {
-        Map<String, String> data = new HashMap<>();
-        data.put("ca.crt", Base64.getEncoder().encodeToString(clientsCA.cert()));
-        return createSecret(KafkaCluster.clientsPublicKeyName(cluster), data);
-    }
-
-    /**
-     * Generate the Secret containing just the self-signed CA certificate used
-     * for signing brokers certificates used for communication with clients
-     * It's useful for users to extract the certificate itself to put as trusted on the clients
-     * @return The generated Secret
-     */
-    public Secret generateClusterPublicKeySecret() {
-        Map<String, String> data = new HashMap<>();
-        data.put("ca.crt", Base64.getEncoder().encodeToString(clusterCA.cert()));
-        return createSecret(KafkaCluster.clusterPublicKeyName(cluster), data);
-    }
-
-    /**
-     * Generate the Secret containing CA self-signed certificate for TLS communication.
-     * It also contains the private key-certificate (signed by cluster CA) for each brokers as well as for communicating
-     * with Zookeeper as well
-     * @return The generated Secret
-     */
-    public Secret generateBrokersSecret() {
-        Base64.Encoder encoder = Base64.getEncoder();
-
-        Map<String, String> data = new HashMap<>();
-        data.put("cluster-ca.crt", encoder.encodeToString(clusterCA.cert()));
-
-        for (int i = 0; i < replicas; i++) {
-            CertAndKey cert = brokerCerts.get(KafkaCluster.kafkaPodName(cluster, i));
-            data.put(KafkaCluster.kafkaPodName(cluster, i) + ".key", encoder.encodeToString(cert.key()));
-            data.put(KafkaCluster.kafkaPodName(cluster, i) + ".crt", encoder.encodeToString(cert.cert()));
-        }
-        return createSecret(KafkaCluster.brokersSecretName(cluster), data);
-    }
-
-    private List<ContainerPort> getContainerPortList() {
-        List<ContainerPort> portList = new ArrayList<>(3);
-        portList.add(createContainerPort(CLIENT_PORT_NAME, CLIENT_PORT, "TCP"));
-        portList.add(createContainerPort(REPLICATION_PORT_NAME, REPLICATION_PORT, "TCP"));
-        portList.add(createContainerPort(CLIENT_TLS_PORT_NAME, CLIENT_TLS_PORT, "TCP"));
-        if (isMetricsEnabled) {
-            portList.add(createContainerPort(metricsPortName, metricsPort, "TCP"));
-        }
-
-        return portList;
+            getVolumes(),
+            getVolumeClaims(),
+            getVolumeMounts(),
+            getMergedAffinity(),
+            getInitContainers(),
+            getContainers(),
+            isOpenShift
+        );
     }
 
     private List<Volume> getVolumes() {
@@ -458,9 +447,6 @@ public class KafkaCluster extends AbstractModel {
         return volumeMountList;
     }
 
-    /**
-     * Returns a combined affinity: Adding the affinity needed for the "kafka-rack" to the {@link #getUserAffinity()}.
-     */
     @Override
     protected Affinity getMergedAffinity() {
         Affinity userAffinity = getUserAffinity();
@@ -551,9 +537,53 @@ public class KafkaCluster extends AbstractModel {
         return containers;
     }
 
-    @Override
-    protected String getServiceAccountName() {
-        return initContainerServiceAccountName(cluster);
+    public Secret generateClientsCASecret() {
+        Map<String, String> data = new HashMap<>();
+        data.put("clients-ca.key", Base64.getEncoder().encodeToString(clientsCA.key()));
+        data.put("clients-ca.crt", Base64.getEncoder().encodeToString(clientsCA.cert()));
+        return createSecret(KafkaCluster.clientsCASecretName(cluster), data);
+    }
+
+    public Secret generateClientsPublicKeySecret() {
+        Map<String, String> data = new HashMap<>();
+        data.put("ca.crt", Base64.getEncoder().encodeToString(clientsCA.cert()));
+        return createSecret(KafkaCluster.clientsPublicKeyName(cluster), data);
+    }
+
+    public static String clientsPublicKeyName(String cluster) {
+        return cluster + KafkaCluster.SECRET_CLIENTS_PUBLIC_KEY_SUFFIX;
+    }
+
+    public Secret generateClusterPublicKeySecret() {
+        Map<String, String> data = new HashMap<>();
+        data.put("ca.crt", Base64.getEncoder().encodeToString(clusterCA.cert()));
+        return createSecret(KafkaCluster.clusterPublicKeyName(cluster), data);
+    }
+
+    public Secret generateBrokersSecret() {
+        Base64.Encoder encoder = Base64.getEncoder();
+
+        Map<String, String> data = new HashMap<>();
+        data.put("cluster-ca.crt", encoder.encodeToString(clusterCA.cert()));
+
+        for (int i = 0; i < replicas; i++) {
+            CertAndKey cert = brokerCerts.get(KafkaCluster.kafkaPodName(cluster, i));
+            data.put(KafkaCluster.kafkaPodName(cluster, i) + ".key", encoder.encodeToString(cert.key()));
+            data.put(KafkaCluster.kafkaPodName(cluster, i) + ".crt", encoder.encodeToString(cert.cert()));
+        }
+        return createSecret(KafkaCluster.brokersSecretName(cluster), data);
+    }
+
+    private List<ContainerPort> getContainerPortList() {
+        List<ContainerPort> portList = new ArrayList<>(3);
+        portList.add(createContainerPort(CLIENT_PORT_NAME, CLIENT_PORT, "TCP"));
+        portList.add(createContainerPort(REPLICATION_PORT_NAME, REPLICATION_PORT, "TCP"));
+        portList.add(createContainerPort(CLIENT_TLS_PORT_NAME, CLIENT_TLS_PORT, "TCP"));
+        if (isMetricsEnabled) {
+            portList.add(createContainerPort(metricsPortName, metricsPort, "TCP"));
+        }
+
+        return portList;
     }
 
     @Override
@@ -575,25 +605,9 @@ public class KafkaCluster extends AbstractModel {
         return varList;
     }
 
-    protected void setZookeeperConnect(String zookeeperConnect) {
-        this.zookeeperConnect = zookeeperConnect;
-    }
-
-    protected void setRack(Rack rack) {
-        this.rack = rack;
-    }
-
-    protected void setInitImage(String initImage) {
-        this.initImage = initImage;
-    }
-
-    protected void setTlsSidecar(Sidecar tlsSidecar) {
-        this.tlsSidecar = tlsSidecar;
-    }
-
     @Override
-    protected String getDefaultLogConfigFileName() {
-        return "kafkaDefaultLoggingProperties";
+    protected String getServiceAccountName() {
+        return initContainerServiceAccountName(cluster);
     }
 
     public ServiceAccount generateInitContainerServiceAccount() {
@@ -606,25 +620,14 @@ public class KafkaCluster extends AbstractModel {
             .build();
     }
 
-
-    /**
-     * Get the name of the kafka service account given the name of the {@code kafkaResourceName}.
-     */
     public static String initContainerServiceAccountName(String kafkaResourceName) {
         return kafkaClusterName(kafkaResourceName);
     }
 
-    /**
-     * Get the name of the kafka kafkaResourceName role binding given the name of the {@code kafkaResourceName}.
-     */
     public static String initContainerClusterRoleBindingName(String kafkaResourceName) {
         return "strimzi-" + kafkaResourceName + "-kafka-init";
     }
 
-    /**
-     * Creates the ClusterRoleBinding which is used to bind the Kafka SA to the ClusterRole
-     * which permissions the Kafka init container to access K8S nodes (necessary for rack-awareness).
-     */
     public ClusterRoleBindingOperator.ClusterRoleBinding generateClusterRoleBinding(String assemblyNamespace) {
         if (rack != null) {
             return new ClusterRoleBindingOperator.ClusterRoleBinding(
@@ -635,6 +638,5 @@ public class KafkaCluster extends AbstractModel {
             return null;
         }
     }
-
 
 }

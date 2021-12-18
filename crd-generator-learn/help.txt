@@ -1,0 +1,8 @@
+java -classpath crd-generator.jar io.strimzi.crdgenerator.CrdGenerator --yaml
+io.strimzi.api.kafka.model.KafkaAssembly=04-Crd-kafka.yaml
+io.strimzi.api.kafka.model.KafkaConnectAssembly=04-Crd-kafkaconnect.yaml
+io.strimzi.api.kafka.model.KafkaConnectS2IAssembly=04-Crd-kafkaconnects2i.yaml
+
+
+mvn -Dmaven.javadoc.skip=true -DskipITs -DskipTests install -f ../pom.xml -N
+

@@ -14,15 +14,8 @@ import io.fabric8.openshift.client.dsl.BuildConfigResource;
 import io.vertx.core.Future;
 import io.vertx.core.Vertx;
 
-/**
- * Operations for {@code BuildConfig}s.
- */
 public class BuildConfigOperator extends AbstractResourceOperator<OpenShiftClient, BuildConfig, BuildConfigList, DoneableBuildConfig, BuildConfigResource<BuildConfig, DoneableBuildConfig, Void, Build>> {
-    /**
-     * Constructor
-     * @param vertx The Vertx instance
-     * @param client The OpenShift client
-     */
+
     public BuildConfigOperator(Vertx vertx, OpenShiftClient client) {
         super(vertx, client, "BuildConfig");
     }

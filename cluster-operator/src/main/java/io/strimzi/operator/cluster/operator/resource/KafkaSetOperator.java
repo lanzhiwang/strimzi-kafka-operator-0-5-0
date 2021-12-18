@@ -11,19 +11,10 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 
-/**
- * Specialization of {@link StatefulSetOperator} for StatefulSets of Kafka brokers
- */
 public class KafkaSetOperator extends StatefulSetOperator {
 
     private static final Logger log = LogManager.getLogger(KafkaSetOperator.class);
 
-    /**
-     * Constructor
-     *
-     * @param vertx  The Vertx instance
-     * @param client The Kubernetes client
-     */
     public KafkaSetOperator(Vertx vertx, KubernetesClient client, long operationTimeoutMs) {
         super(vertx, client, operationTimeoutMs);
     }

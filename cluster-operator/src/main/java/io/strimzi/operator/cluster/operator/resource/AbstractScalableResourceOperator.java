@@ -15,14 +15,6 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 
-/**
- * An {@link AbstractResourceOperator} that can be scaled up and down in addition to the usual operations.
- * @param <C> The type of client used to interact with kubernetes.
- * @param <T> The Kubernetes resource type.
- * @param <L> The list variant of the Kubernetes resource type.
- * @param <D> The doneable variant of the Kubernetes resource type.
- * @param <R> The resource operations.
- */
 public abstract class AbstractScalableResourceOperator<C extends KubernetesClient,
             T extends HasMetadata,
             L extends KubernetesResourceList/*<T>*/,
@@ -32,12 +24,6 @@ public abstract class AbstractScalableResourceOperator<C extends KubernetesClien
 
     private final Logger log = LogManager.getLogger(getClass());
 
-    /**
-     * Constructor
-     * @param vertx The Vertx instance
-     * @param client The Kubernetes client
-     * @param resourceKind The kind of resource.
-     */
     public AbstractScalableResourceOperator(Vertx vertx, C client, String resourceKind) {
         super(vertx, client, resourceKind);
     }
@@ -46,17 +32,6 @@ public abstract class AbstractScalableResourceOperator<C extends KubernetesClien
         return operation().inNamespace(namespace).withName(name);
     }
 
-    /**
-     * Asynchronously scale up the resource given by {@code namespace} and {@code name} to have the scale given by
-     * {@code scaleTo}, returning a future for the outcome.
-     * If the resource does not exist, or has a current scale >= the given {@code scaleTo}, then complete successfully.
-     * @param namespace The namespace of the resource to scale.
-     * @param name The name of the resource to scale.
-     * @param scaleTo The desired scale.
-     * @return A future whose value is the scale after the operation.
-     * If the scale was initially > the given {@code scaleTo} then this value will be the original scale,
-     * The value will be null if the resource didn't exist (hence no scaling occurred).
-     */
     public Future<Integer> scaleUp(String namespace, String name, int scaleTo) {
         Future<Integer> fut = Future.future();
         vertx.createSharedWorkerExecutor("kubernetes-ops-pool").executeBlocking(
@@ -82,17 +57,6 @@ public abstract class AbstractScalableResourceOperator<C extends KubernetesClien
 
     protected abstract Integer currentScale(String namespace, String name);
 
-    /**
-     * Asynchronously scale down the resource given by {@code namespace} and {@code name} to have the scale given by
-     * {@code scaleTo}, returning a future for the outcome.
-     * If the resource does not exists, is has a current scale <= the given {@code scaleTo} then complete successfully.
-     * @param namespace The namespace of the resource to scale.
-     * @param name The name of the resource to scale.
-     * @param scaleTo The desired scale.
-     * @return A future whose value is the scale after the operation.
-     * If the scale was initially < the given {@code scaleTo} then this value will be the original scale,
-     * The value will be null if the resource didn't exist (hence no scaling occurred).
-     */
     public Future<Integer> scaleDown(String namespace, String name, int scaleTo) {
         Future<Integer> fut = Future.future();
         vertx.createSharedWorkerExecutor("kubernetes-ops-pool").executeBlocking(
